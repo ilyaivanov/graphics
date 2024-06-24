@@ -1,0 +1,10 @@
+#pragma once
+#include "types.h"
+#include "sincos.c"
+#include "win32.c"
+#include "math.c"
+#include "performance.c"
+#include "format.c"
+#include "random.c"
+#include "collision.c"
+#include "string.c"
