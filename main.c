@@ -4,9 +4,20 @@
 
 i32 isRunning = 1;
 MyBitmap bitmap;
+f32 *zBuffer;
+u32 zBufferLength;
+
 BITMAPINFO bitmapInfo;
 
 V2f mouseScreenPos;
+
+V3f RED = {1.0f, 0.0, 0.0};
+V3f BLUE = {0.0f, 1.0, 0.0};
+V3f GREEN = {0.0f, 0.0, 1.0};
+
+V3f YELLOW = {1.0f, 1.0, 0.0};
+V3f PURPLE = {1.0f, 0.0, 1.0};
+V3f DARK_PURPLE = {0.5f, 0.0, 1.0};
 
 LRESULT OnEvent(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -25,8 +36,13 @@ LRESULT OnEvent(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 
         if (bitmap.pixels)
             VirtualFreeMemory(bitmap.pixels);
+        if (zBuffer)
+            VirtualFreeMemory(zBuffer);
 
         bitmap.pixels = VirtualAllocateMemory(bitmap.width * bitmap.height * 4);
+
+        zBufferLength = bitmap.width * bitmap.height * sizeof(f32);
+        zBuffer = VirtualAllocateMemory(bitmap.width * bitmap.height * sizeof(f32));
     }
 
     if (message == WM_PAINT)
@@ -122,47 +138,18 @@ void FillTriangleInterpolatedColors(V3f p1, V3f p2, V3f p3, V3f p1ColorF, V3f p2
                 f32 t3 = 1.0f - t1 - t2;
 
                 V3f res = LerpV3f(p1ColorF, p2ColorF, p3ColorF, t1, t2, t3);
+                f32 zInterpolated = Lerp3f(1 / p1.z, 1 / p2.z, 1 / p3.z, t1, t2, t3);
+                zInterpolated = 1 / zInterpolated;
 
-                u32 color = ((u32)(res.x * 0xff) << 16) |
-                            ((u32)(res.y * 0xff) << 8) |
-                            ((u32)(res.z * 0xff) << 0);
-                *(bitmap.pixels + y * bitmap.width + x) = color;
+                if (zBuffer[y * bitmap.width + x] > zInterpolated)
+                {
+                    zBuffer[y * bitmap.width + x] = zInterpolated;
+                    u32 color = ((u32)(res.x * 0xff) << 16) |
+                                ((u32)(res.y * 0xff) << 8) |
+                                ((u32)(res.z * 0xff) << 0);
+                    bitmap.pixels[y * bitmap.width + x] = color;
+                }
             }
-        }
-}
-
-void FillPolygon4(V3f p1, V3f p2, V3f p3, V3f p4, u32 color)
-{
-    V2f screenP1 = WorldToScreen(p1);
-    V2f screenP2 = WorldToScreen(p2);
-    V2f screenP3 = WorldToScreen(p3);
-    V2f screenP4 = WorldToScreen(p4);
-
-    f32 minX = Max2Int(Min4Int(screenP1.x, screenP2.x, screenP3.x, screenP4.x), 0);
-    f32 maxX = Min2Int(Max4Int(screenP1.x, screenP2.x, screenP3.x, screenP4.x), bitmap.width);
-
-    f32 minY = Max2Int(Min4Int(screenP1.y, screenP2.y, screenP3.y, screenP4.y), 0);
-    f32 maxY = Min2Int(Max4Int(screenP1.y, screenP2.y, screenP3.y, screenP4.y), bitmap.height);
-
-    V2f first = screenP1;
-    V2f second = screenP2;
-    V2f third = screenP3;
-    V2f fourth = screenP4;
-
-    // f32 minX = 0;
-    // f32 maxX = bitmap.width;
-
-    // f32 minY = 0;
-    // f32 maxY = bitmap.height;
-
-    for (i32 y = minY; y < maxY; y++)
-        for (i32 x = minX; x < maxX; x++)
-        {
-            if (V2fCross(V2fDiff(second, first), V2fDiff((V2f){x + 0.5f, y + 0.5f}, first)) <= 0 &&
-                V2fCross(V2fDiff(third, second), V2fDiff((V2f){x + 0.5f, y + 0.5f}, second)) <= 0 &&
-                V2fCross(V2fDiff(fourth, third), V2fDiff((V2f){x + 0.5f, y + 0.5f}, third)) <= 0 &&
-                V2fCross(V2fDiff(first, fourth), V2fDiff((V2f){x + 0.5f, y + 0.5f}, fourth)) <= 0)
-                *(bitmap.pixels + y * bitmap.width + x) = color;
         }
 }
 
@@ -174,12 +161,8 @@ void DrawLowerPlane(f32 leftX, f32 rightX, f32 nearZ, f32 farZ, u32 color)
     V3f farLeft = {leftX, y, farZ};
     V3f nearRight = {rightX, y, nearZ};
 
-#ifndef USE_POLYGON
     FillTriangle(nearLeft, farRight, nearRight, color);
     FillTriangle(nearLeft, farLeft, farRight, color);
-#else
-    FillPolygon4(nearLeft, farLeft, farRight, nearRight, color);
-#endif
 }
 
 void DrawUpperPlane(f32 leftX, f32 rightX, f32 nearZ, f32 farZ, u32 color)
@@ -189,12 +172,9 @@ void DrawUpperPlane(f32 leftX, f32 rightX, f32 nearZ, f32 farZ, u32 color)
     V3f farRight = {rightX, y, farZ};
     V3f farLeft = {leftX, y, farZ};
     V3f nearRight = {rightX, y, nearZ};
-#ifndef USE_POLYGON
+
     FillTriangle(nearLeft, farRight, farLeft, color);
     FillTriangle(nearLeft, nearRight, farRight, color);
-#else
-    FillPolygon4(nearLeft, nearRight, farRight, farLeft, color);
-#endif
 }
 
 void DrawLeftPlane(f32 upperY, f32 lowerY, f32 nearZ, f32 farZ, u32 color)
@@ -206,12 +186,8 @@ void DrawLeftPlane(f32 upperY, f32 lowerY, f32 nearZ, f32 farZ, u32 color)
     V3f farUp = {x, upperY, farZ};
     V3f farDown = {x, lowerY, farZ};
 
-#ifndef USE_POLYGON
     FillTriangle(nearUp, farUp, nearDown, color);
     FillTriangle(nearDown, farUp, farDown, color);
-#else
-    FillPolygon4(nearUp, farUp, farDown, nearDown, color);
-#endif
 }
 
 void DrawRightPlane(f32 upperY, f32 lowerY, f32 nearZ, f32 farZ, u32 color)
@@ -223,12 +199,8 @@ void DrawRightPlane(f32 upperY, f32 lowerY, f32 nearZ, f32 farZ, u32 color)
     V3f farUp = {x, upperY, farZ};
     V3f farDown = {x, lowerY, farZ};
 
-#ifndef USE_POLYGON
     FillTriangle(farDown, farUp, nearUp, color);
     FillTriangle(farDown, nearUp, nearDown, color);
-#else
-    FillPolygon4(farUp, nearUp, nearDown, farDown, color);
-#endif
 }
 
 f32 appTimeSec;
@@ -283,26 +255,25 @@ void WinMainCRTStartup()
 
         memset(bitmap.pixels, 0x22, bitmap.height * bitmap.width * 4);
 
+        // some big Z
+        for (int i = 0; i < bitmap.width * bitmap.height; i++)
+            zBuffer[i] = 1000000000.0f;
+
+        V3f top = {0.0, 0.5, 1};
+        V3f right = {0.5f, -0.5, 1};
+        V3f left = {-0.5, -0.5, 1};
+
+        FillTriangleInterpolatedColors(left, top, right, RED, BLUE, GREEN);
+
         f32 sin;
         f32 cos;
-        f32 r = appTimeSec;
-        f32 z = 1;
-        for (f32 z = 40; z >= 1; z -= 0.5f)
-        {
-            MySinCos(r * 10, &sin, &cos);
-            V3f center = {mouseScreenPos.x + sin * 0.01f, mouseScreenPos.y + cos * 0.01f, z};
-            V3f left = {center.x - 0.3f, center.y - 0.2f, z};
-            V3f top = {center.x, center.y + 0.3f, z};
-            V3f right = {center.x + 0.3f, center.y - 0.2f, z};
+        // MySinCos(appTimeSec, &sin, &cos);
+        top = (V3f){0.0, 0.5, 1};
+        right = (V3f){0.5f, -0.5, 1.2};
+        left = (V3f){-0.5, -0.5, 0.8};
 
-            u32 g = (10 - z) / 10 * 0xff;
-            V3f leftColor = {1.0f, 0.0, 0.0};
-            V3f topColor = {0.0f, 1.0, 0.0};
-            V3f rightColor = {0.0f, 0.0, 1.0};
-            FillTriangleInterpolatedColors(left, top, right, leftColor, topColor, rightColor);
+        FillTriangleInterpolatedColors(left, top, right, DARK_PURPLE, YELLOW, PURPLE);
 
-            r += 2 * E_PI / 100;
-        }
         // for (int i = 0; i < ArrayLength(bordersZ); i++)
         // {
         //     bordersZ[i] -= prevFrameTimeSec * speed;
