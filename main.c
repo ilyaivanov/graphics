@@ -6,6 +6,8 @@ i32 isRunning = 1;
 MyBitmap bitmap;
 BITMAPINFO bitmapInfo;
 
+V2f mouseScreenPos;
+
 LRESULT OnEvent(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
     if (message == WM_DESTROY)
@@ -32,6 +34,12 @@ LRESULT OnEvent(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
         PAINTSTRUCT paint = {0};
         BeginPaint(window, &paint);
         EndPaint(window, &paint);
+    }
+
+    if (message == WM_MOUSEMOVE)
+    {
+        mouseScreenPos.x = (f32)LOWORD(lParam) / bitmap.width * 2 - 1;
+        mouseScreenPos.y = (f32)(bitmap.height - HIWORD(lParam)) / bitmap.height * 2 - 1;
     }
     return DefWindowProc(window, message, wParam, lParam);
 }
@@ -77,6 +85,52 @@ void FillTriangle(V3f p1, V3f p2, V3f p3, u32 color)
         }
 }
 
+void FillTriangleInterpolatedColors(V3f p1, V3f p2, V3f p3, V3f p1ColorF, V3f p2ColorF, V3f p3ColorF)
+{
+    V2f screenP1 = WorldToScreen(p1);
+    V2f screenP2 = WorldToScreen(p2);
+    V2f screenP3 = WorldToScreen(p3);
+
+    f32 minX = Max2Int(Min3Int(screenP1.x, screenP2.x, screenP3.x), 0);
+    f32 maxX = Min2Int(Max3Int(screenP1.x, screenP2.x, screenP3.x), bitmap.width);
+
+    f32 minY = Max2Int(Min3Int(screenP1.y, screenP2.y, screenP3.y), 0);
+    f32 maxY = Min2Int(Max3Int(screenP1.y, screenP2.y, screenP3.y), bitmap.height);
+
+    V2f A = screenP1;
+    V2f B = screenP2;
+    V2f C = screenP3;
+
+    // f32 minX = 0;
+    // f32 maxX = bitmap.width;
+
+    // f32 minY = 0;
+    // f32 maxY = bitmap.height;
+
+    f32 volume = -V2fCross(V2fDiff(A, B), V2fDiff(A, C));
+
+    for (i32 y = minY; y < maxY; y++)
+        for (i32 x = minX; x < maxX; x++)
+        {
+            V2f point = (V2f){x + 0.5f, y + 0.5f};
+            if (V2fCross(V2fDiff(B, A), V2fDiff(point, A)) <= 0 &&
+                V2fCross(V2fDiff(C, B), V2fDiff(point, B)) <= 0 &&
+                V2fCross(V2fDiff(A, C), V2fDiff(point, C)) <= 0)
+            {
+                f32 t1 = V2fCross(V2fDiff(B, point), V2fDiff(B, C)) / volume;
+                f32 t2 = V2fCross(V2fDiff(C, point), V2fDiff(C, A)) / volume;
+                f32 t3 = 1.0f - t1 - t2;
+
+                V3f res = LerpV3f(p1ColorF, p2ColorF, p3ColorF, t1, t2, t3);
+
+                u32 color = ((u32)(res.x * 0xff) << 16) |
+                            ((u32)(res.y * 0xff) << 8) |
+                            ((u32)(res.z * 0xff) << 0);
+                *(bitmap.pixels + y * bitmap.width + x) = color;
+            }
+        }
+}
+
 void FillPolygon4(V3f p1, V3f p2, V3f p3, V3f p4, u32 color)
 {
     V2f screenP1 = WorldToScreen(p1);
@@ -111,8 +165,6 @@ void FillPolygon4(V3f p1, V3f p2, V3f p3, V3f p4, u32 color)
                 *(bitmap.pixels + y * bitmap.width + x) = color;
         }
 }
-
-// #define USE_POLYGON
 
 void DrawLowerPlane(f32 leftX, f32 rightX, f32 nearZ, f32 farZ, u32 color)
 {
@@ -216,7 +268,7 @@ void WinMainCRTStartup()
     for (int i = 0; i < ArrayLength(bordersZ); i++)
         bordersZ[i] = i;
 
-    HWND window = OpenAppWindowWithSize(GetModuleHandle(0), OnEvent, 1300, 1300);
+    HWND window = OpenAppWindowWithSize(GetModuleHandle(0), OnEvent, 1600, 1600);
     HDC dc = GetDC(window);
     MSG msg;
     f32 prevFrameTimeSec = 0;
@@ -229,22 +281,42 @@ void WinMainCRTStartup()
             DispatchMessage(&msg);
         }
 
-        for (int i = 0; i < ArrayLength(bordersZ); i++)
-        {
-            bordersZ[i] -= prevFrameTimeSec * speed;
-            if (bordersZ[i] < 0.01f)
-            {
-                bordersZ[i] = ArrayLength(bordersZ) - 1;
-            }
-        }
-
         memset(bitmap.pixels, 0x22, bitmap.height * bitmap.width * 4);
 
-        for (int i = 0; i < ArrayLength(bordersZ); i++)
+        f32 sin;
+        f32 cos;
+        f32 r = appTimeSec;
+        f32 z = 1;
+        for (f32 z = 40; z >= 1; z -= 0.5f)
         {
-            f32 z = bordersZ[i];
-            DrawBorder(z, colors[i * 4], colors[i * 4 + 1], colors[i * 4 + 2], colors[i * 4 + 3]);
+            MySinCos(r * 10, &sin, &cos);
+            V3f center = {mouseScreenPos.x + sin * 0.01f, mouseScreenPos.y + cos * 0.01f, z};
+            V3f left = {center.x - 0.3f, center.y - 0.2f, z};
+            V3f top = {center.x, center.y + 0.3f, z};
+            V3f right = {center.x + 0.3f, center.y - 0.2f, z};
+
+            u32 g = (10 - z) / 10 * 0xff;
+            V3f leftColor = {1.0f, 0.0, 0.0};
+            V3f topColor = {0.0f, 1.0, 0.0};
+            V3f rightColor = {0.0f, 0.0, 1.0};
+            FillTriangleInterpolatedColors(left, top, right, leftColor, topColor, rightColor);
+
+            r += 2 * E_PI / 100;
         }
+        // for (int i = 0; i < ArrayLength(bordersZ); i++)
+        // {
+        //     bordersZ[i] -= prevFrameTimeSec * speed;
+        //     if (bordersZ[i] < 0.01f)
+        //     {
+        //         bordersZ[i] = ArrayLength(bordersZ) - 1;
+        //     }
+        // }
+
+        // for (int i = 0; i < ArrayLength(bordersZ); i++)
+        // {
+        //     f32 z = bordersZ[i];
+        //     DrawBorder(z, colors[i * 4], colors[i * 4 + 1], colors[i * 4 + 2], colors[i * 4 + 3]);
+        // }
 
         StretchDIBits(dc,
                       0, 0, bitmap.width, bitmap.height,

@@ -79,6 +79,14 @@ inline i32 Max2Int(i32 a, i32 b)
         return a;
     return b;
 }
+
+inline f32 Min2F(f32 a, f32 b)
+{
+    if (a <= b)
+        return a;
+    return b;
+}
+
 //
 // Vectors
 //
@@ -147,6 +155,31 @@ inline V3f V3fLerpXY(V3f v, f32 minX, f32 maxX, f32 minY, f32 maxY)
         v.y = maxY;
 
     return v;
+}
+
+inline V3f V3fAdd3(V3f p1, V3f p2, V3f p3)
+{
+    return (V3f){p1.x + p2.x + p3.x, p1.y + p2.y + p3.y, p1.z + p2.z + p3.z};
+}
+
+inline V3f V3fMul(V3f p1, f32 scalar)
+{
+    return (V3f){p1.x * scalar, p1.y * scalar, p1.z * scalar};
+}
+
+inline f32 Lerp3f(f32 p1, f32 p2, f32 p3, f32 t1, f32 t2, f32 t3)
+{
+    return p1 * t1 + p2 * t2 + p3 * t3;
+}
+
+inline V3f LerpV3f(V3f p1, V3f p2, V3f p3, f32 t1, f32 t2, f32 t3)
+{
+    return V3fAdd3(V3fMul(p1, t1), V3fMul(p2, t2), V3fMul(p3, t3));
+}
+
+inline f32 Lerp3u(u32 p1, u32 p2, u32 p3, f32 t1, f32 t2, f32 t3)
+{
+    return p1 * t1 + p2 * t2 + p3 * t3;
 }
 
 float V2fCross(V2f p1, V2f p2)
