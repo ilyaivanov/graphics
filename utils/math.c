@@ -29,6 +29,12 @@ inline i32 AbsInt(i32 val)
         return -val;
     return val;
 }
+inline f32 Absf32(f32 val)
+{
+    if (val < 0)
+        return -val;
+    return val;
+}
 
 inline i32 Min4Int(i32 a, i32 b, i32 c, i32 d)
 {
@@ -97,6 +103,7 @@ inline f32 Min2F(f32 a, f32 b)
 typedef struct V2f { f32 x, y;    } V2f;
 typedef struct V2i { i32 x, y;    } V2i;
 typedef struct V3f { f32 x, y, z; } V3f;
+typedef struct V4f { f32 x, y, z, w; } V4f;
 
 // clang-format on
 
@@ -187,6 +194,20 @@ float V2fCross(V2f p1, V2f p2)
     return (p1.x * p2.y) - (p1.y * p2.x);
 }
 
+inline V4f V4(f32 x, f32 y, f32 z)
+{
+    return (V4f){x, y, z, 1};
+}
+inline V3f V3(f32 x, f32 y, f32 z)
+{
+    return (V3f){x, y, z};
+}
+
+inline V4f V4Direction(f32 x, f32 y, f32 z)
+{
+    return (V4f){x, y, z, 0};
+}
+
 //
 // Matrixes
 //
@@ -196,6 +217,20 @@ typedef struct Mat4
 {
     float values[16];
 } Mat4;
+
+#define M4_AT(mat, x, y) mat.values[x + y * 4]
+
+inline Mat4 Mat4Identity()
+{
+    // clang-format off
+    return (Mat4){
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+    };
+    // clang-format on
+}
 
 inline Mat4 CreateScreenProjection(V2i screen)
 {
@@ -234,6 +269,20 @@ inline Mat4 Mat4TranslateXY(Mat4 mat, f32 x, f32 y)
     mat.values[3 + 1 * 4] += y;
     return mat;
 }
+inline Mat4 Mat4TranslateXYZ(f32 x, f32 y, f32 z)
+{
+    Mat4 mat = Mat4Identity();
+    mat.values[3 + 0 * 4] += x;
+    mat.values[3 + 1 * 4] += y;
+    mat.values[3 + 2 * 4] += z;
+    return mat;
+}
+
+inline Mat4 Mat4TranslateZ(Mat4 mat, f32 z)
+{
+    M4_AT(mat, 3, 2) = z;
+    return mat;
+}
 
 inline Mat4 Mat4Scale1f(Mat4 mat, float v)
 {
@@ -266,28 +315,63 @@ inline Mat4 Mat4ScaleXY(Mat4 mat, f32 x, f32 y)
     return mat;
 }
 
-inline Mat4 Mat4RotateZ(Mat4 mat, f32 rads)
+inline Mat4 Mat4RotateZ(f32 rads)
 {
+    Mat4 mat = Mat4Identity();
     f32 sin;
     f32 cos;
-    SinCos(rads, &sin, &cos);
+    MySinCos(rads, &sin, &cos);
 
-    mat.values[0 + 0 * 4] *= cos;
-    // mat.values[0 + 1 * 4] *= -sin;
-    // mat.values[1 + 0 * 4] *= sin;
-    // mat.values[1 + 1 * 4] *= cos;
-
+    M4_AT(mat, 0, 0) = cos;
+    M4_AT(mat, 0, 1) = -sin;
+    M4_AT(mat, 1, 0) = sin;
+    M4_AT(mat, 1, 1) = cos;
     return mat;
 }
 
-inline Mat4 Mat4Identity()
+inline Mat4 Mat4RotateX(f32 rads)
 {
-    // clang-format off
-    return (Mat4){
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-    };
-    // clang-format on
+    Mat4 mat = Mat4Identity();
+    f32 sin;
+    f32 cos;
+    MySinCos(rads, &sin, &cos);
+
+    M4_AT(mat, 1, 1) = cos;
+    M4_AT(mat, 1, 2) = -sin;
+    M4_AT(mat, 2, 1) = sin;
+    M4_AT(mat, 2, 2) = cos;
+    return mat;
+}
+
+inline Mat4 Mat4RotateY(f32 rads)
+{
+    Mat4 mat = Mat4Identity();
+    f32 sin;
+    f32 cos;
+    MySinCos(rads, &sin, &cos);
+    M4_AT(mat, 0, 0) = cos;
+    M4_AT(mat, 0, 2) = -sin;
+    M4_AT(mat, 2, 0) = sin;
+    M4_AT(mat, 2, 2) = cos;
+    return mat;
+}
+
+inline Mat4 Mat4Mult(Mat4 m1, Mat4 m2)
+{
+    Mat4 result = {0};
+    for (int row = 0; row < 4; row++)
+        for (int col = 0; col < 4; col++)
+            for (int k = 0; k < 4; k++)
+                M4_AT(result, col, row) += M4_AT(m1, k, row) * M4_AT(m2, col, k);
+
+    return result;
+}
+inline V4f Mat4MultV4f(Mat4 m, V4f v)
+{
+    V4f res;
+    res.x = M4_AT(m, 0, 0) * v.x + M4_AT(m, 1, 0) * v.y + M4_AT(m, 2, 0) * v.z + M4_AT(m, 3, 0) * v.w;
+    res.y = M4_AT(m, 0, 1) * v.x + M4_AT(m, 1, 1) * v.y + M4_AT(m, 2, 1) * v.z + M4_AT(m, 3, 1) * v.w;
+    res.z = M4_AT(m, 0, 2) * v.x + M4_AT(m, 1, 2) * v.y + M4_AT(m, 2, 2) * v.z + M4_AT(m, 3, 2) * v.w;
+    res.w = M4_AT(m, 0, 3) * v.x + M4_AT(m, 1, 3) * v.y + M4_AT(m, 2, 3) * v.z + M4_AT(m, 3, 3) * v.w;
+    return res;
 }
