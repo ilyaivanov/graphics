@@ -298,18 +298,10 @@ void WinMainCRTStartup()
             V3(1, 1, 1),
         };
 
-        // Mat4 mat = Mat4ScaleXY(Mat4Identity(), sin + 1, cos + 1);
-        // Mat4 mat = Mat4Mult(Mat4Identity(), Mat4TranslateZ(Mat4Identity(), 1 + sin * 0.3f));
         Mat4 mat = Mat4Identity();
-        // mat = Mat4Mult(mat, Mat4RotateZ(mat, appTimeSec / 4));
         mat = Mat4Mult(mat, Mat4TranslateXYZ(0, 0, 4 + sin * 2));
-        mat = Mat4Mult(mat, Mat4RotateY(appTimeSec / 4));
-        mat = Mat4Mult(mat, Mat4RotateX(appTimeSec / 3));
-        // mat = Mat4Mult(mat, Mat4RotateY(mat, appTimeSec / 4));
-        mat = Mat4Mult(mat, Mat4RotateZ(appTimeSec / 2.5));
-        // mat = Mat4Mult(mat, Mat4TranslateXYZ((cos) * 3, -Absf32(sin) * 3, 4));
+        mat = Mat4Mult(mat, Mat4RotateXYZ(appTimeSec / 3, appTimeSec / 4, appTimeSec / 2.5));
 
-        // FillTriangleInterpolatedColors(trig, mat);
         // clang-format off
         u32 modelIndices[] = {
             0, 1, 2, //front 

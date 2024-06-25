@@ -232,6 +232,26 @@ inline Mat4 Mat4Identity()
     // clang-format on
 }
 
+inline Mat4 Mat4Mult(Mat4 m1, Mat4 m2)
+{
+    Mat4 result = {0};
+    for (int row = 0; row < 4; row++)
+        for (int col = 0; col < 4; col++)
+            for (int k = 0; k < 4; k++)
+                M4_AT(result, col, row) += M4_AT(m1, k, row) * M4_AT(m2, col, k);
+
+    return result;
+}
+inline V4f Mat4MultV4f(Mat4 m, V4f v)
+{
+    V4f res;
+    res.x = M4_AT(m, 0, 0) * v.x + M4_AT(m, 1, 0) * v.y + M4_AT(m, 2, 0) * v.z + M4_AT(m, 3, 0) * v.w;
+    res.y = M4_AT(m, 0, 1) * v.x + M4_AT(m, 1, 1) * v.y + M4_AT(m, 2, 1) * v.z + M4_AT(m, 3, 1) * v.w;
+    res.z = M4_AT(m, 0, 2) * v.x + M4_AT(m, 1, 2) * v.y + M4_AT(m, 2, 2) * v.z + M4_AT(m, 3, 2) * v.w;
+    res.w = M4_AT(m, 0, 3) * v.x + M4_AT(m, 1, 3) * v.y + M4_AT(m, 2, 3) * v.z + M4_AT(m, 3, 3) * v.w;
+    return res;
+}
+
 inline Mat4 CreateScreenProjection(V2i screen)
 {
     // allows me to set vecrtex coords as 0..width/height, instead of -1..+1
@@ -329,17 +349,33 @@ inline Mat4 Mat4RotateZ(f32 rads)
     return mat;
 }
 
-inline Mat4 Mat4RotateX(f32 rads)
+inline Mat4 Mat4RotateXYZ(f32 x, f32 y, f32 z)
 {
-    Mat4 mat = Mat4Identity();
     f32 sin;
     f32 cos;
-    MySinCos(rads, &sin, &cos);
 
-    M4_AT(mat, 1, 1) = cos;
-    M4_AT(mat, 1, 2) = -sin;
-    M4_AT(mat, 2, 1) = sin;
-    M4_AT(mat, 2, 2) = cos;
+    Mat4 matX = Mat4Identity();
+    MySinCos(x, &sin, &cos);
+    M4_AT(matX, 1, 1) = cos;
+    M4_AT(matX, 1, 2) = -sin;
+    M4_AT(matX, 2, 1) = sin;
+    M4_AT(matX, 2, 2) = cos;
+
+    Mat4 matY = Mat4Identity();
+    MySinCos(y, &sin, &cos);
+    M4_AT(matY, 0, 0) = cos;
+    M4_AT(matY, 0, 2) = -sin;
+    M4_AT(matY, 2, 0) = sin;
+    M4_AT(matY, 2, 2) = cos;
+
+    Mat4 matZ = Mat4Identity();
+    MySinCos(z, &sin, &cos);
+    M4_AT(matZ, 0, 0) = cos;
+    M4_AT(matZ, 0, 1) = -sin;
+    M4_AT(matZ, 1, 0) = sin;
+    M4_AT(matZ, 1, 1) = cos;
+
+    Mat4 mat = Mat4Mult(matX, Mat4Mult(matY, matZ));
     return mat;
 }
 
@@ -354,24 +390,4 @@ inline Mat4 Mat4RotateY(f32 rads)
     M4_AT(mat, 2, 0) = sin;
     M4_AT(mat, 2, 2) = cos;
     return mat;
-}
-
-inline Mat4 Mat4Mult(Mat4 m1, Mat4 m2)
-{
-    Mat4 result = {0};
-    for (int row = 0; row < 4; row++)
-        for (int col = 0; col < 4; col++)
-            for (int k = 0; k < 4; k++)
-                M4_AT(result, col, row) += M4_AT(m1, k, row) * M4_AT(m2, col, k);
-
-    return result;
-}
-inline V4f Mat4MultV4f(Mat4 m, V4f v)
-{
-    V4f res;
-    res.x = M4_AT(m, 0, 0) * v.x + M4_AT(m, 1, 0) * v.y + M4_AT(m, 2, 0) * v.z + M4_AT(m, 3, 0) * v.w;
-    res.y = M4_AT(m, 0, 1) * v.x + M4_AT(m, 1, 1) * v.y + M4_AT(m, 2, 1) * v.z + M4_AT(m, 3, 1) * v.w;
-    res.z = M4_AT(m, 0, 2) * v.x + M4_AT(m, 1, 2) * v.y + M4_AT(m, 2, 2) * v.z + M4_AT(m, 3, 2) * v.w;
-    res.w = M4_AT(m, 0, 3) * v.x + M4_AT(m, 1, 3) * v.y + M4_AT(m, 2, 3) * v.z + M4_AT(m, 3, 3) * v.w;
-    return res;
 }
